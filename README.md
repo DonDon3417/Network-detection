@@ -19,15 +19,6 @@ Hệ thống phát hiện xâm nhập mạng sử dụng Apache Spark và Machin
 
 ---
 
-## 📊 Kết quả
-
-| Model | Accuracy | F1 Score | AUC | Training Time |
-|-------|----------|----------|-----|---------------|
-| **Logistic Regression** | 95.18% | 95.18% | 98.86% | ~30s |
-| **XGBoost** | 98.74% | 98.74% | 99.92% | ~150s |
-
----
-
 ## 🚀 Quick Start
 
 ### 1. Clone repository
@@ -109,20 +100,6 @@ Network-detection/
 - **Python**: 3.11.9
 - **Java**: JDK 8 hoặc 11 (cho Spark)
 
----
-
-## 📚 Dependencies
-
-```
-pyspark==4.0.1
-xgboost
-pyarrow>=11.0.0
-pandas
-numpy
-scikit-learn
-matplotlib
-seaborn
-```
 
 Cài đặt:
 ```bash
@@ -180,34 +157,6 @@ Train và evaluate, không lưu models.
 ### Dataset split
 - **Train**: 125,973 records
 - **Test**: 22,544 records
-
----
-
-## 🐛 Troubleshooting
-
-### Lỗi: "HADOOP_HOME is not set"
-**Giải pháp:**
-```bash
-install_hadoop.bat
-```
-
-### Lỗi: "ModuleNotFoundError: No module named 'pyspark'"
-**Giải pháp:**
-```bash
-pip install pyspark xgboost pyarrow
-```
-
-### Lỗi: "Python worker exited unexpectedly"
-**Nguyên nhân:** Python version không tương thích
-
-**Giải pháp:** Dùng Python 3.11 (không dùng 3.12)
-```bash
-setup_python311.bat
-```
-
-### Lỗi: "Java gateway process exited"
-**Giải pháp:** Cài Java JDK 8 hoặc 11
-- Download: https://adoptium.net/
 
 ---
 
