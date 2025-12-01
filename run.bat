@@ -1,4 +1,5 @@
 @echo off
+setlocal enabledelayedexpansion
 chcp 65001 >nul
 echo ===============================================================================
 echo    NETWORK INTRUSION DETECTION - SPARK BIG DATA
@@ -14,9 +15,6 @@ if not exist "venv311\Scripts\python.exe" (
 )
 
 echo [INFO] Sử dụng Python 3.11: venv311\Scripts\python.exe
-
-echo [INFO] Sử dụng Python 3.11: venv311\Scripts\python.exe
-
 echo [INFO] Kiểm tra thư viện...
 
 REM Kiểm tra và cài đặt PySpark
@@ -59,7 +57,56 @@ echo ===========================================================================
 echo.
 
 REM Kiểm tra tham số
-if "%1"=="--load" (
+if "%1"=="--dashboard" (
+    echo [MODE] Dashboard - Tạo giao diện web
+    echo.
+    
+    REM Kiểm tra xem đã có models chưa
+    if not exist "spark_models\logistic_regression" (
+        echo [WARNING] Chưa có models đã train!
+        echo.
+        set /p choice="Bạn có muốn train models trước không? (Y/N): "
+        if /i "!choice!"=="Y" (
+            echo.
+            echo [INFO] Đang train models...
+            venv311\Scripts\python.exe spark_intrusion_detection.py --save-models
+            echo.
+        )
+    )
+    
+    echo [INFO] Đang tạo dữ liệu cho dashboard...
+    echo.
+    venv311\Scripts\python.exe generate_dashboard_data.py
+    
+    if errorlevel 1 (
+        echo.
+        echo [ERROR] Lỗi khi tạo dữ liệu dashboard
+        goto :end
+    )
+    
+    echo.
+    echo ===============================================================================
+    echo [SUCCESS] Dashboard data đã sẵn sàng!
+    echo ===============================================================================
+    echo.
+    echo 🌐 Cách xem dashboard:
+    echo.
+    echo    Cách 1: Mở trực tiếp file
+    echo    -------------------------
+    echo    - Mở file: dashboard.html bằng trình duyệt
+    echo.
+    echo    Cách 2: Chạy web server (khuyến nghị)
+    echo    --------------------------------------
+    echo    - Chạy lệnh: python -m http.server 8000
+    echo    - Mở trình duyệt: http://localhost:8000/dashboard.html
+    echo.
+    set /p openchoice="Bạn có muốn mở dashboard ngay không? (Y/N): "
+    if /i "!openchoice!"=="Y" (
+        echo [INFO] Đang mở dashboard...
+        start dashboard.html
+    )
+    
+) else if "%1"=="--load" (
     echo [MODE] Sử dụng models đã lưu
     venv311\Scripts\python.exe spark_intrusion_detection.py --load-models
 ) else if "%1"=="--save" (
@@ -72,9 +119,11 @@ if "%1"=="--load" (
     echo [MODE] Train models mới (không lưu)
     echo [TIP] Sử dụng: run.bat --save để lưu models sau khi train
     echo [TIP] Sử dụng: run.bat --load để load models đã lưu
+    echo [TIP] Sử dụng: run.bat --dashboard để tạo giao diện web
     venv311\Scripts\python.exe spark_intrusion_detection.py
 )
 
+:end
 echo.
 echo ===============================================================================
 echo [INFO] Hoàn tất!
