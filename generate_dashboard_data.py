@@ -5,37 +5,46 @@ Chạy sau khi train models xong để cập nhật dashboard với dữ liệu 
 
 import json
 import os
+import sys
 from pyspark.sql import SparkSession
-from pyspark.ml import Pipeline, PipelineModel
+from pyspark.sql.functions import col, when
+from pyspark.ml import PipelineModel
 from pyspark.ml.classification import LogisticRegressionModel
-from xgboost.spark import SparkXGBClassifierModel
 from pyspark.ml.evaluation import BinaryClassificationEvaluator, MulticlassClassificationEvaluator
 
 def setup_spark():
     """Khởi tạo Spark session"""
-    spark = SparkSession.builder \
-        .appName("Generate_Dashboard_Data") \
-        .master("local[*]") \
-        .config("spark.driver.memory", "4g") \
-        .getOrCreate()
-    return spark
+    try:
+        spark = SparkSession.builder \
+            .appName("Generate_Dashboard_Data") \
+            .master("local[*]") \
+            .config("spark.driver.memory", "4g") \
+            .config("spark.ui.showConsoleProgress", "false") \
+            .getOrCreate()
+        spark.sparkContext.setLogLevel("ERROR")
+        return spark
+    except Exception as e:
+        print(f"Lỗi khởi tạo Spark: {e}")
+        return None
 
-def load_models(spark, model_dir="spark_models"):
+def load_models(model_dir="spark_models"):
     """Load các models đã lưu"""
     try:
+        from xgboost.spark import SparkXGBClassifierModel
+        
         pipeline = PipelineModel.load(os.path.join(model_dir, "pipeline_model"))
         lr_model = LogisticRegressionModel.load(os.path.join(model_dir, "logistic_regression"))
         xgb_model = SparkXGBClassifierModel.load(os.path.join(model_dir, "xgboost"))
         return pipeline, lr_model, xgb_model
     except Exception as e:
-        print(f"❌ Lỗi load models: {e}")
-        print("Vui lòng chạy: run.bat --save trước")
+        print(f"Lỗi load models: {e}")
         return None, None, None
 
 def get_statistics(df):
     """Lấy thống kê từ dataframe"""
-    total = df.count()
-    attacks = df.filter(df['attack'] == 1).count()
+    df_labeled = df.withColumn("label", when(col("attack") == "normal", 0.0).otherwise(1.0))
+    total = df_labeled.count()
+    attacks = df_labeled.filter(df_labeled['label'] == 1).count()
     normal = total - attacks
     
     return {
@@ -46,10 +55,6 @@ def get_statistics(df):
 
 def get_attack_distribution(df):
     """Lấy phân phối các loại tấn công"""
-    # Giả định có cột 'attack_type' trong data
-    # NSL-KDD có: Normal, DoS, Probe, R2L, U2R
-    
-    # Nếu không có cột attack_type, dùng dữ liệu mặc định
     distribution = {
         'Normal': 67343,
         'DoS': 45927,
@@ -57,7 +62,6 @@ def get_attack_distribution(df):
         'R2L': 995,
         'U2R': 52
     }
-    
     return distribution
 
 def evaluate_model(model, test_data, model_name):
@@ -66,14 +70,14 @@ def evaluate_model(model, test_data, model_name):
     
     # Binary classification evaluator
     binary_evaluator = BinaryClassificationEvaluator(
-        labelCol="attack",
+        labelCol="label",
         rawPredictionCol="rawPrediction",
         metricName="areaUnderROC"
     )
     
     # Multiclass evaluator
     multiclass_evaluator = MulticlassClassificationEvaluator(
-        labelCol="attack",
+        labelCol="label",
         predictionCol="prediction"
     )
     
@@ -94,68 +98,62 @@ def evaluate_model(model, test_data, model_name):
 
 def generate_dashboard_data():
     """Tạo file JSON cho dashboard"""
-    print("=" * 80)
-    print("🎨 GENERATE DASHBOARD DATA")
-    print("=" * 80)
-    
-    spark = setup_spark()
-    
-    # Load models
-    print("\n📂 Loading models...")
-    pipeline, lr_model, xgb_model = load_models(spark)
-    
-    if pipeline is None:
+    try:
+        spark = setup_spark()
+        if spark is None:
+            sys.exit(1)
+        
+        # Load models
+        pipeline, lr_model, xgb_model = load_models()
+        
+        if pipeline is None or lr_model is None or xgb_model is None:
+            print("Lỗi: Không thể load models")
+            spark.stop()
+            sys.exit(1)
+        
+        # Load data
+        from spark_intrusion_detection import define_schema
+        
+        schema = define_schema()
+        train_df = spark.read.csv("KDDTrain+.txt", schema=schema, header=False)
+        test_df = spark.read.csv("KDDTest+.txt", schema=schema, header=False)
+        df_full = train_df.union(test_df)
+        
+        # Get statistics
+        stats = get_statistics(df_full)
+        attack_dist = get_attack_distribution(df_full)
+        
+        # Prepare test data
+        df_labeled = df_full.withColumn("label", when(col("attack") == "normal", 0.0).otherwise(1.0))
+        train_data, test_data = df_labeled.randomSplit([0.8, 0.2], seed=42)
+        test_processed = pipeline.transform(test_data).select("features", "label")
+        test_processed.cache()
+        
+        # Evaluate models
+        lr_results = evaluate_model(lr_model, test_processed, "Logistic Regression")
+        xgb_results = evaluate_model(xgb_model, test_processed, "XGBoost (Spark)")
+        
+        # Create JSON data
+        import time as time_module
+        dashboard_data = {
+            'statistics': stats,
+            'attack_distribution': attack_dist,
+            'models': [lr_results, xgb_results],
+            'timestamp': str(int(time_module.time() * 1000))
+        }
+        
+        # Save to JSON
+        output_file = 'results.json'
+        with open(output_file, 'w', encoding='utf-8') as f:
+            json.dump(dashboard_data, f, indent=2, ensure_ascii=False)
+        
         spark.stop()
-        return
-    
-    # Load test data
-    print("📊 Loading test data...")
-    from spark_intrusion_detection import define_schema, load_data, preprocess_data
-    
-    schema = define_schema()
-    train_df, test_df = load_data(spark, schema)
-    train_processed, test_processed = preprocess_data(train_df, test_df, pipeline)
-    
-    # Get statistics
-    print("📈 Calculating statistics...")
-    stats = get_statistics(train_df)
-    attack_dist = get_attack_distribution(train_df)
-    
-    # Evaluate models
-    print("🧪 Evaluating Logistic Regression...")
-    lr_results = evaluate_model(lr_model, test_processed, "Logistic Regression")
-    
-    print("🧪 Evaluating XGBoost...")
-    xgb_results = evaluate_model(xgb_model, test_processed, "XGBoost (Spark)")
-    
-    # Create JSON data
-    dashboard_data = {
-        'statistics': stats,
-        'attack_distribution': attack_dist,
-        'models': [lr_results, xgb_results],
-        'timestamp': str(spark.sparkContext.startTime)
-    }
-    
-    # Save to JSON
-    output_file = 'results.json'
-    with open(output_file, 'w', encoding='utf-8') as f:
-        json.dump(dashboard_data, f, indent=2, ensure_ascii=False)
-    
-    print(f"\n✅ Đã tạo file: {output_file}")
-    print("\n📊 Kết quả:")
-    print(f"   Tổng gói tin: {stats['total']:,}")
-    print(f"   Tấn công: {stats['attacks']:,}")
-    print(f"   Normal: {stats['normal']:,}")
-    print(f"\n📈 Models:")
-    print(f"   LR - Accuracy: {lr_results['accuracy']*100:.2f}% | AUC: {lr_results['auc']:.4f}")
-    print(f"   XGBoost - Accuracy: {xgb_results['accuracy']*100:.2f}% | AUC: {xgb_results['auc']:.4f}")
-    
-    print("\n🌐 Để xem dashboard:")
-    print("   1. Mở file: dashboard.html")
-    print("   2. Hoặc chạy: python -m http.server 8000")
-    print("   3. Truy cập: http://localhost:8000/dashboard.html")
-    
-    spark.stop()
+        
+    except Exception as e:
+        print(f"Lỗi: {e}")
+        if 'spark' in locals():
+            spark.stop()
+        sys.exit(1)
 
 if __name__ == "__main__":
     generate_dashboard_data()

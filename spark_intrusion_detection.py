@@ -47,6 +47,11 @@ def setup_hadoop_home():
 
 def create_spark_session():
     """Khởi tạo SparkSession"""
+    print("\n")
+    print("=" * 80)
+    print(" " * 15 + "NETWORK INTRUSION DETECTION - SPARK BIG DATA")
+    print("=" * 80)
+    print()
     print("=" * 80)
     print("KHỞI TẠO SPARK SESSION")
     print("=" * 80)
@@ -508,46 +513,38 @@ def main():
                         help='Thư mục chứa models (mặc định: spark_models)')
     args = parser.parse_args()
     
-    print("\n")
-    print("=" * 80)
-    print(" " * 15 + "NETWORK INTRUSION DETECTION - SPARK BIG DATA")
-    print("=" * 80)
-    print()
-    
     total_start = time.time()
     
     # 1. Khởi tạo Spark
     spark = create_spark_session()
     
-    # 2. Đọc dữ liệu
-    df = load_data(spark)
-    
-    # 3. Tiền xử lý
-    df_clean, pipeline = preprocess_data(df)
-    
-    # 4. Chia train/test
-    print("=" * 80)
-    print("CHIA DỮ LIỆU")
-    print("=" * 80)
-    train_data, test_data = df_clean.randomSplit([0.8, 0.2], seed=42)
-    print(f"✓ Train: {train_data.count():,} dòng")
-    print(f"✓ Test: {test_data.count():,} dòng")
-    print()
-    
-    # 5. Kiểm tra load models hoặc train mới
+    # 2. Kiểm tra load models hoặc train mới
     use_loaded_models = args.load_models and os.path.exists(args.models_dir)
     
     if use_loaded_models:
         # Load models đã lưu
         loaded_pipeline, lr_model, xgb_model = load_models(args.models_dir)
         
-        if loaded_pipeline and lr_model:
+        if loaded_pipeline and lr_model and xgb_model:
+            # Đọc dữ liệu
+            df = load_data(spark)
+            
+            # Chia train/test
+            print("=" * 80)
+            print("CHIA DỮ LIỆU")
+            print("=" * 80)
+            df_labeled = df.withColumn(
+                "label",
+                when(col("attack") == "normal", 0.0).otherwise(1.0)
+            )
+            train_data, test_data = df_labeled.randomSplit([0.8, 0.2], seed=42)
+            print(f"✓ Train: {train_data.count():,} dòng")
+            print(f"✓ Test: {test_data.count():,} dòng")
+            print()
+            
             # Áp dụng Pipeline đã load
             print("Đang áp dụng Pipeline đã load...")
-            train_final = loaded_pipeline.transform(train_data).select("features", "label")
             test_final = loaded_pipeline.transform(test_data).select("features", "label")
-            
-            train_final.cache()
             test_final.cache()
             
             print(f"✓ Test final: {test_final.count():,} dòng")
@@ -570,6 +567,22 @@ def main():
     
     if not use_loaded_models:
         # Train models mới
+        # 2. Đọc dữ liệu
+        df = load_data(spark)
+        
+        # 3. Tiền xử lý
+        df_clean, pipeline = preprocess_data(df)
+        
+        # 4. Chia train/test
+        print("=" * 80)
+        print("CHIA DỮ LIỆU")
+        print("=" * 80)
+        train_data, test_data = df_clean.randomSplit([0.8, 0.2], seed=42)
+        print(f"✓ Train: {train_data.count():,} dòng")
+        print(f"✓ Test: {test_data.count():,} dòng")
+        print()
+        
+        # 5. Áp dụng Pipeline và train
         print("Đang áp dụng Pipeline...")
         start = time.time()
         pipeline_model = pipeline.fit(train_data)

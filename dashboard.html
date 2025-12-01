@@ -8,17 +8,107 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        body { background-color: #1a1c23; color: #e2e8f0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-        .card { background-color: #24262d; border: none; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); margin-bottom: 20px; }
-        .card-header { background-color: #24262d; border-bottom: 1px solid #374151; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; }
-        .text-success-custom { color: #10b981; }
-        .text-danger-custom { color: #ef4444; }
-        .text-warning-custom { color: #f59e0b; }
-        .stat-card h3 { font-size: 2.5rem; font-weight: bold; margin: 0; }
-        .stat-card p { color: #9ca3af; margin: 0; }
-        .table-dark { background-color: #24262d; --bs-table-bg: #24262d; color: #e2e8f0; border-color: #374151; }
-        .badge-attack { background-color: #ef4444; color: white; padding: 5px 10px; border-radius: 4px; }
-        .badge-normal { background-color: #10b981; color: white; padding: 5px 10px; border-radius: 4px; }
+        body { 
+            background: linear-gradient(135deg, #1a1c23 0%, #2d3748 100%);
+            color: #f7fafc; 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            min-height: 100vh;
+        }
+        .card { 
+            background: linear-gradient(135deg, #2d3748 0%, #1a202c 100%);
+            border: 1px solid #4a5568;
+            border-radius: 15px; 
+            box-shadow: 0 8px 16px rgba(0,0,0,0.4);
+            margin-bottom: 20px;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 12px 24px rgba(0,0,0,0.5);
+        }
+        .card-header { 
+            background: linear-gradient(135deg, #4a5568 0%, #2d3748 100%);
+            border-bottom: 2px solid #63b3ed;
+            font-weight: bold; 
+            text-transform: uppercase; 
+            letter-spacing: 1.5px;
+            color: #e2e8f0;
+            padding: 15px 20px;
+            font-size: 0.95rem;
+        }
+        .text-success-custom { color: #48bb78; font-weight: 600; }
+        .text-danger-custom { color: #f56565; font-weight: 600; }
+        .text-warning-custom { color: #ed8936; font-weight: 600; }
+        .stat-card { 
+            background: linear-gradient(135deg, #2d3748 0%, #1a202c 100%);
+            border: 1px solid #4a5568;
+        }
+        .stat-card h3 { 
+            font-size: 2.5rem; 
+            font-weight: bold; 
+            margin: 0;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        .stat-card p { 
+            color: #cbd5e0; 
+            margin: 0;
+            font-weight: 500;
+            font-size: 0.95rem;
+        }
+        .table-dark { 
+            background-color: #2d3748; 
+            --bs-table-bg: #2d3748; 
+            color: #f7fafc; 
+            border-color: #4a5568;
+        }
+        .table-dark thead th {
+            background-color: #1a202c;
+            color: #e2e8f0;
+            font-weight: 600;
+            border-color: #4a5568;
+        }
+        .table-dark tbody tr {
+            border-color: #4a5568;
+        }
+        .table-dark tbody tr:hover {
+            background-color: #374151;
+        }
+        .badge-attack { 
+            background: linear-gradient(135deg, #f56565 0%, #c53030 100%);
+            color: white; 
+            padding: 6px 12px; 
+            border-radius: 6px;
+            font-weight: 600;
+            box-shadow: 0 2px 4px rgba(245,101,101,0.3);
+        }
+        .badge-normal { 
+            background: linear-gradient(135deg, #48bb78 0%, #2f855a 100%);
+            color: white; 
+            padding: 6px 12px; 
+            border-radius: 6px;
+            font-weight: 600;
+            box-shadow: 0 2px 4px rgba(72,187,120,0.3);
+        }
+        .badge {
+            font-size: 0.9rem;
+        }
+        h2, h3 {
+            color: #f7fafc;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        small.text-muted {
+            color: #cbd5e0 !important;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #4299e1 0%, #3182ce 100%);
+            border: none;
+            box-shadow: 0 2px 4px rgba(66,153,225,0.3);
+        }
+        .btn-primary:hover {
+            background: linear-gradient(135deg, #3182ce 0%, #2c5282 100%);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(66,153,225,0.4);
+        }
     </style>
 </head>
 <body>
@@ -31,6 +121,9 @@
         </div>
         <div>
             <span class="badge bg-success p-2"><i class="fas fa-check-circle"></i> Hệ thống Online</span>
+            <button class="btn btn-sm btn-primary ms-2" onclick="loadResults()">
+                <i class="fas fa-sync-alt"></i> Tải lại
+            </button>
         </div>
     </div>
 
@@ -169,16 +262,22 @@
 </div>
 
 <script>
+    // Biến global để lưu charts
+    let comparisonChart, attackChart;
+    
     // Load dữ liệu từ file JSON nếu có
     async function loadResults() {
         try {
-            const response = await fetch('results.json');
+            const response = await fetch('results.json?t=' + new Date().getTime());
             if (response.ok) {
                 const data = await response.json();
                 updateDashboard(data);
+                console.log('✓ Đã load dữ liệu mới từ results.json');
+            } else {
+                console.log('⚠ Không tìm thấy results.json, sử dụng dữ liệu mặc định');
             }
         } catch (error) {
-            console.log('Sử dụng dữ liệu mặc định');
+            console.log('⚠ Lỗi load results.json:', error);
         }
     }
 
@@ -189,7 +288,7 @@
             document.getElementById('normal-traffic').textContent = data.statistics.normal.toLocaleString();
         }
 
-        if (data.models) {
+        if (data.models && data.models.length > 0) {
             updateResultsTable(data.models);
             updateComparisonChart(data.models);
         }
@@ -204,14 +303,15 @@
         tbody.innerHTML = '';
         
         models.forEach((model, index) => {
+            const isBest = index === models.length - 1;
             const row = `
-                <tr ${index === models.length - 1 ? 'style="border-left: 4px solid #f59e0b;"' : ''}>
-                    <td class="${index === models.length - 1 ? 'fw-bold' : ''}">${model.name} ${index === models.length - 1 ? '<i class="fas fa-star text-warning"></i>' : ''}</td>
-                    <td class="${index === models.length - 1 ? 'text-success-custom fw-bold' : 'text-warning'}">${(model.accuracy * 100).toFixed(2)}%</td>
+                <tr ${isBest ? 'style="border-left: 4px solid #f59e0b;"' : ''}>
+                    <td class="${isBest ? 'fw-bold' : ''}">${model.name} ${isBest ? '<i class="fas fa-star text-warning"></i>' : ''}</td>
+                    <td class="${isBest ? 'text-success-custom fw-bold' : 'text-warning'}">${(model.accuracy * 100).toFixed(2)}%</td>
                     <td>${(model.precision * 100).toFixed(2)}%</td>
                     <td>${(model.recall * 100).toFixed(2)}%</td>
                     <td>${(model.f1 * 100).toFixed(2)}%</td>
-                    <td class="${index === models.length - 1 ? 'fw-bold' : ''}">${model.auc.toFixed(4)}</td>
+                    <td class="${isBest ? 'fw-bold' : ''}">${model.auc.toFixed(4)}</td>
                 </tr>
             `;
             tbody.insertAdjacentHTML('beforeend', row);
@@ -220,7 +320,7 @@
 
     // --- 1. Biểu đồ So sánh Mô hình ---
     const ctxComparison = document.getElementById('modelComparisonChart').getContext('2d');
-    const comparisonChart = new Chart(ctxComparison, {
+    comparisonChart = new Chart(ctxComparison, {
         type: 'bar',
         data: {
             labels: ['Accuracy', 'Precision', 'Recall', 'F1-Score', 'AUC'],
@@ -244,10 +344,18 @@
         options: {
             responsive: true,
             scales: {
-                y: { beginAtZero: true, max: 1.0 }
+                y: { beginAtZero: true, max: 1.0, ticks: { color: 'white' } },
+                x: { ticks: { color: 'white' } }
             },
             plugins: {
-                legend: { labels: { color: 'white' } }
+                legend: { labels: { color: 'white' } },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return context.dataset.label + ': ' + (context.parsed.y * 100).toFixed(2) + '%';
+                        }
+                    }
+                }
             }
         }
     });
@@ -257,16 +365,20 @@
             comparisonChart.data.datasets[0].data = [
                 models[0].accuracy, models[0].precision, models[0].recall, models[0].f1, models[0].auc
             ];
+            comparisonChart.data.datasets[0].label = models[0].name;
+            
             comparisonChart.data.datasets[1].data = [
                 models[1].accuracy, models[1].precision, models[1].recall, models[1].f1, models[1].auc
             ];
+            comparisonChart.data.datasets[1].label = models[1].name;
+            
             comparisonChart.update();
         }
     }
 
     // --- 2. Biểu đồ Phân phối Tấn Công ---
     const ctxPie = document.getElementById('attackDistChart').getContext('2d');
-    const attackChart = new Chart(ctxPie, {
+    attackChart = new Chart(ctxPie, {
         type: 'doughnut',
         data: {
             labels: ['Normal', 'DoS', 'Probe', 'R2L', 'U2R'],
@@ -279,7 +391,17 @@
         options: {
             responsive: true,
             plugins: {
-                legend: { position: 'right', labels: { color: 'white' } }
+                legend: { position: 'right', labels: { color: 'white' } },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                            const value = context.parsed;
+                            const percent = ((value / total) * 100).toFixed(1);
+                            return context.label + ': ' + value.toLocaleString() + ' (' + percent + '%)';
+                        }
+                    }
+                }
             }
         }
     });
